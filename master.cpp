@@ -11,6 +11,7 @@
 
 const int HEARTBEAT_INTERVAL = 1;                    // in seconds
 const int TIMEOUT_INTERVAL = 3 * HEARTBEAT_INTERVAL; // in seconds
+const int DEFAULT_BASE_PORT = 8100;
 
 struct Worker {
 
@@ -76,25 +77,47 @@ void pingWorker(Worker &worker) {
   }
 }
 
-int main() {
-  std::vector<Worker> workers = {
-      Worker{1, "127.0.0.1", 8100, 0, Worker::EMBRYO,
-             std::chrono::system_clock::now()},
-      Worker{2, "127.0.0.1", 8101, 0, Worker::EMBRYO,
-             std::chrono::system_clock::now()},
-  };
+struct Args {
+  int n_workers;
+  int base_port;
+};
+
+Args parseArgs(int argc, char **argv) {
+  Args args;
+  if (argc == 2) {
+    args.n_workers = std::stoi(argv[1]);
+    args.base_port = DEFAULT_BASE_PORT;
+  } else if (argc == 3) {
+    args.n_workers = std::stoi(argv[1]);
+    args.base_port = std::stoi(argv[2]);
+  } else {
+    std::cout << "Usage: master <n_workers> [base_port]" << std::endl;
+    exit(1);
+  }
+  return args;
+}
+
+int main(int argc, char **argv) {
+  std::vector<Worker> workers;
+
+  Args args = parseArgs(argc, argv);
+
+  std::cout << args.base_port;
+  for (int i = 0; i < args.n_workers; i++) {
+    Worker worker = Worker{i, "127.0.0.1",    args.base_port + i,
+                           0, Worker::EMBRYO, std::chrono::system_clock::now()};
+    workers.push_back(worker);
+  }
 
   while (true) {
     for (auto &worker : workers) {
       switch (worker.connection_state) {
       case Worker::EMBRYO:
+      case Worker::DISCONNECTED:
         connectWorker(worker);
         break;
       case Worker::CONNECTED:
         pingWorker(worker);
-        break;
-      case Worker::DISCONNECTED:
-        connectWorker(worker);
         break;
       case Worker::DEAD:
         break;
